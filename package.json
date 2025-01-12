@@ -11,5 +11,8 @@
     "url": "git+https://github.com/auppal12/fragments.git"
   },
   "author": "Amitoj",
-  "license": "UNLICENSED"
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "prettier": "3.4.2"
+  }
 }
