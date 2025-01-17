@@ -40,16 +40,18 @@ module.exports.strategy = () =>
     // in the Authorization header, then verify that with our Cognito JWT Verifier.
     new BearerStrategy(async (token, done) => {
         try {
-        // Verify this JWT
-        const user = await jwtVerifier.verify(token);
-        logger.debug({ user }, 'verified user token');
-
-        // Create a user, but only bother with their email. We could
-        // also do a lookup in a database, but we don't need it.
-        done(null, user.email);
+            // Verify this JWT
+            const user = await jwtVerifier.verify(token);
+            logger.debug({ user }, 'verified user token');
+            logger.info("User Authorized");
+    
+            // Create a user, but only bother with their email. We could
+            // also do a lookup in a database, but we don't need it.
+            done(null, user.email);
         } catch (err) {
-        logger.error({ err, token }, 'could not verify token');
-        done(null, false);
+            logger.error({ err, token }, 'could not verify token');
+            logger.info("User Unauthorized");
+            done(null, false);
         }
     });
 
