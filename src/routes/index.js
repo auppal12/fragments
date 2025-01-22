@@ -1,5 +1,4 @@
-// src/routes/index.js
-
+const { createSuccessResponse } = require('../response');
 const express = require('express');
 
 // version and author from package.json
@@ -27,7 +26,7 @@ router.get('/', (req, res) => {
     res.setHeader('Cache-Control', 'no-cache');
     // Send a 200 'OK' response
     res.status(200).json({
-        status: 'ok',
+        ...createSuccessResponse(),
         author,
         githubUrl: 'https://github.com/auppal12/fragments',
         version,
