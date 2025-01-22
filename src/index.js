@@ -31,3 +31,5 @@ try {
 
 // Start our server
 require('./server');
+
+const unneededVariable = 'This variable is never used';
