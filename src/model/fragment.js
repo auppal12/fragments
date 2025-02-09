@@ -3,6 +3,7 @@
 const { randomUUID } = require('crypto');
 // Use https://www.npmjs.com/package/content-type to create/parse Content-Type headers
 const contentType = require('content-type');
+const logger = require('../logger');
 
 // Functions for working with fragment metadata/data using our DB
 const {
@@ -50,22 +51,27 @@ class Fragment {
      */
     static async byUser(ownerId, expand = false) {
         if (!ownerId) {
+            logger.warn('Attempt to get fragments with missing ownerId');
             throw new Error('ownerId is required');
         }
 
+        logger.debug({ ownerId, expand }, 'Getting fragments for user');
         const fragmentIds = await listFragments(ownerId);
 
         if (!expand) {
+            logger.debug({ count: fragmentIds.length }, 'Returning fragment ids');
             return fragmentIds;
         }
 
+        logger.debug('Expanding fragment ids to full fragments');
         const fragments = await Promise.all(
             fragmentIds.map(async (id) => {
                 const fragmentData = await readFragment(ownerId, id);
-                return new Fragment({ ownerId, ...fragmentData }); // Ensure ownerId is included
+                return new Fragment({ ownerId, ...fragmentData });
             })
         );
 
+        logger.info({ ownerId, count: fragments.length }, 'Successfully retrieved fragments');
         return fragments;
     }
 
@@ -76,10 +82,13 @@ class Fragment {
      * @returns Promise<Fragment>
      */
     static async byId(ownerId, id) {
+        logger.debug({ ownerId, fragmentId: id }, 'Getting fragment by id');
         const fragment = await readFragment(ownerId, id);
         if (!fragment) {
+            logger.warn({ ownerId, fragmentId: id }, 'Fragment not found');
             throw new Error('Fragment not found');
         }
+        logger.debug({ fragmentId: id }, 'Fragment found');
         return new Fragment(fragment);
     }
 
@@ -90,7 +99,14 @@ class Fragment {
      * @returns Promise<void>
      */
     static async delete(ownerId, id) {
-        await deleteFragment(ownerId, id);
+        logger.debug({ ownerId, fragmentId: id }, 'Attempting to delete fragment');
+        try {
+            await deleteFragment(ownerId, id);
+            logger.info({ ownerId, fragmentId: id }, 'Fragment deleted successfully');
+        } catch (error) {
+            logger.error({ error, ownerId, fragmentId: id }, 'Error deleting fragment');
+            throw error;
+        }
     }
 
     /**
@@ -98,16 +114,31 @@ class Fragment {
      * @returns Promise<void>
      */
     async save() {
-        this.updated = new Date().toISOString();
-        await writeFragment(this);
-    }
+            logger.debug({ fragmentId: this.id }, 'Saving fragment metadata');
+            this.updated = new Date().toISOString();
+            try {
+                await writeFragment(this);
+                logger.info({ fragmentId: this.id }, 'Fragment metadata saved successfully');
+            } catch (error) {
+                logger.error({ error, fragmentId: this.id }, 'Error saving fragment metadata');
+                throw error;
+            }
+        }
 
     /**
      * Gets the fragment's data from the database
      * @returns Promise<Buffer>
      */
     async getData() {
-        return await readFragmentData(this.ownerId, this.id);
+        logger.debug({ fragmentId: this.id }, 'Getting fragment data');
+        try {
+            const data = await readFragmentData(this.ownerId, this.id);
+            logger.debug({ fragmentId: this.id, size: data.length }, 'Fragment data retrieved');
+            return data;
+        } catch (error) {
+            logger.error({ error, fragmentId: this.id }, 'Error reading fragment data');
+            throw error;
+        }
     }
 
     /**
@@ -118,13 +149,23 @@ class Fragment {
 
     async setData(data) {
         // TIP: make sure you update the metadata whenever you change the data, so they match
-        if (!Buffer.isBuffer(data)) {
-            throw new Error('Data must be a Buffer');
+        if (!data) {
+            logger.warn({ fragmentId: this.id }, 'Attempt to set null or undefined data');
+            throw new Error('Data cannot be null or undefined');
         }
-        this.size = data.length;
+
+        logger.debug({ fragmentId: this.id, size: Buffer.byteLength(data) }, 'Setting fragment data');
         this.updated = new Date().toISOString();
-        await writeFragmentData(this.ownerId, this.id, data);
-        await this.save();
+        this.size = Buffer.byteLength(data);
+
+        try {
+            await writeFragment(this);
+            await writeFragmentData(this.ownerId, this.id, data);
+            logger.info({ fragmentId: this.id, size: this.size }, 'Fragment data saved successfully');
+        } catch (error) {
+            logger.error({ error, fragmentId: this.id }, 'Error setting fragment data');
+            throw error;
+        }
     }
 
     /**
@@ -158,8 +199,13 @@ class Fragment {
      * @returns {boolean} true if we support this Content-Type (i.e., type/subtype)
      */
     static isSupportedType(value) {
+        logger.debug({ contentType: value }, 'Checking if content type is supported');
         const { type } = contentType.parse(value);
-        return validTypes.includes(type);
+        const isSupported = validTypes.includes(type);
+        if (!isSupported) {
+            logger.warn({ contentType: value }, 'Unsupported content type');
+        }
+        return isSupported;
     }
 }
 
