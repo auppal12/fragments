@@ -51,4 +51,8 @@ COPY --from=builder /app/tests/.htpasswd ./tests/.htpasswd
 CMD ["npm", "start"]
 
 # We run our service on port 8080
-EXPOSE 8080
+EXPOSE ${PORT}
+
+# Define an automated health check
+HEALTHCHECK --interval=4m \
+    CMD curl --fail http://localhost:${PORT} || exit 1
