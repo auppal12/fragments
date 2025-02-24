@@ -1,5 +1,5 @@
 # Stage 1: Build Stage
-FROM node:22@sha256:cfef4432ab2901fd6ab2cb05b177d3c6f8a7f48cb22ad9d7ae28bb6aa5f8b471 AS builder
+FROM node:22-alpine AS builder
 
 LABEL maintainer="Amitoj Uppal <auppal12@myseneca.ca>" \
       description="Fragments node.js microservice"
@@ -18,8 +18,8 @@ WORKDIR /app
 #Copy all files starting with package name and .json type
 COPY package*.json ./
 
-# Install node dependencies defined in package-lock.json (production only)
-RUN npm ci --only=production
+# Install dependencies and clean cache
+RUN npm ci --only=production && npm cache clean --force
 
 # Copy src to /app/src/
 COPY ./src ./src
@@ -29,14 +29,12 @@ COPY ./tests/.htpasswd ./tests/.htpasswd
 
 
 
-
-
 #--------------------------------------------------------------
 
 
 
 # Stage 2: Production Stage
-FROM node:22@sha256:cfef4432ab2901fd6ab2cb05b177d3c6f8a7f48cb22ad9d7ae28bb6aa5f8b471
+FROM node:22-alpine
 
 # Use /app as our working directory
 WORKDIR /app
