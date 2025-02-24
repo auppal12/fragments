@@ -155,4 +155,51 @@ describe('POST /v1/fragments', () => {
     expect(res.body.status).toBe('ok');
     expect(res.body.fragment.type).toBe('text/csv');
   });
+
+  test('rejects invalid HTML content', async () => {
+    const res = await request(app)
+      .post('/v1/fragments')
+      .auth(username, password)
+      .set('Content-Type', 'text/html')
+      .send('Invalid HTML without tags');
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.status).toBe('error');
+    expect(res.body.error.message).toContain('Invalid HTML format');
+  });
+
+  test('accepts valid HTML content', async () => {
+    const res = await request(app)
+      .post('/v1/fragments')
+      .auth(username, password)
+      .set('Content-Type', 'text/html')
+      .send('<p>Valid HTML with tags</p>');
+
+    expect(res.statusCode).toBe(201);
+    expect(res.body.status).toBe('ok');
+  });
+
+  test('rejects invalid JSON content', async () => {
+    const res = await request(app)
+      .post('/v1/fragments')
+      .auth(username, password)
+      .set('Content-Type', 'application/json')
+      .send('Invalid JSON');
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.status).toBe('error');
+    expect(res.body.error.message).toContain('Invalid JSON format');
+  });
+
+  test('rejects invalid CSV content', async () => {
+    const res = await request(app)
+      .post('/v1/fragments')
+      .auth(username, password)
+      .set('Content-Type', 'text/csv')
+      .send('Invalid CSV without commas');
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.status).toBe('error');
+    expect(res.body.error.message).toContain('Invalid CSV format');
+  });
 });
