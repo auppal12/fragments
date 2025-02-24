@@ -39,11 +39,17 @@ FROM node:22-alpine
 # Use /app as our working directory
 WORKDIR /app
 
+# Install curl and tini as the init process
+RUN apk add --no-cache curl tini && \
+    apk add --no-cache tini
+
 # Copy built files from builder stage
 COPY --from=builder /app/package*.json ./
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/src ./src
 COPY --from=builder /app/tests/.htpasswd ./tests/.htpasswd
+
+ENTRYPOINT ["/sbin/tini", "--"]
 
 # Start the container by running our server
 CMD ["npm", "start"]
@@ -52,5 +58,5 @@ CMD ["npm", "start"]
 EXPOSE ${PORT}
 
 # Define an automated health check
-HEALTHCHECK --interval=4m \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD curl --fail http://localhost:${PORT} || exit 1
