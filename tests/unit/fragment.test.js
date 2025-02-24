@@ -274,6 +274,49 @@ describe('Fragment class', () => {
       expect(() => Fragment.byId('1234', fragment.id)).rejects.toThrow();
     });
 
+    test('setData() validates HTML content', async () => {
+      const fragment = new Fragment({ ownerId: '1234', type: 'text/html', size: 0 });
+      await fragment.save();
 
+      // Should fail without HTML tags
+      await expect(fragment.setData(Buffer.from('Hello World')))
+        .rejects
+        .toThrow('Invalid HTML format: missing HTML tags');
+
+      // Should succeed with HTML tags
+      await expect(fragment.setData(Buffer.from('<p>Hello World</p>')))
+        .resolves
+        .not.toThrow();
+    });
+
+    test('setData() validates JSON content', async () => {
+      const fragment = new Fragment({ ownerId: '1234', type: 'application/json', size: 0 });
+      await fragment.save();
+
+      // Should fail with invalid JSON
+      await expect(fragment.setData(Buffer.from('invalid json')))
+        .rejects
+        .toThrow('Invalid JSON format');
+
+      // Should succeed with valid JSON
+      await expect(fragment.setData(Buffer.from('{"key": "value"}')))
+        .resolves
+        .not.toThrow();
+    });
+
+    test('setData() validates CSV content', async () => {
+      const fragment = new Fragment({ ownerId: '1234', type: 'text/csv', size: 0 });
+      await fragment.save();
+
+      // Should fail without comma-separated values
+      await expect(fragment.setData(Buffer.from('not a csv')))
+        .rejects
+        .toThrow('Invalid CSV format');
+
+      // Should succeed with valid CSV
+      await expect(fragment.setData(Buffer.from('header1,header2\nvalue1,value2')))
+        .resolves
+        .not.toThrow();
+    });
   });
 });
