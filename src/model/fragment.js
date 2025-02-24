@@ -23,6 +23,62 @@ const validTypes = [
   'application/json'
 ];
 
+// validation for text/html type
+const validateHtml = (data) => {
+  const content = data.toString();
+
+  // Extract all HTML tags
+  const tags = content.match(/<\/?[^>]+>/g);
+
+  // If no tags found, invalid HTML
+  if (!tags) {
+    return false;
+  }
+
+  const stack = [];
+
+  for (const tag of tags) {
+    // Skip self-closing tags like <br/>, <img/>
+    if (tag.match(/\/\s*>$/)) {
+      continue;
+    }
+
+    // If it's a closing tag
+    if (tag.startsWith('</')) {
+      const closeTag = tag.slice(2, -1).toLowerCase();
+
+      // If stack is empty or doesn't match the last opening tag
+      if (stack.length === 0 || stack.pop() !== closeTag) {
+        return false;
+      }
+    }
+    // If it's an opening tag
+    else {
+      // Extract tag name without attributes
+      const openTag = tag.match(/<([a-zA-Z0-9]+)/)[1].toLowerCase();
+      stack.push(openTag);
+    }
+  }
+
+  // All tags should be closed (stack should be empty)
+  return stack.length === 0;
+};
+
+const validateJson = (data) => {
+  try {
+    JSON.parse(data.toString());
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+const validateCsv = (data) => {
+  const content = data.toString();
+  // Basic check for comma-separated values
+  return content.includes(',') && content.split('\n').length > 0;
+};
+
 class Fragment {
   constructor({
     id = randomUUID(),
@@ -152,12 +208,32 @@ class Fragment {
    * @param {Buffer} data
    * @returns Promise<void>
    */
-
   async setData(data) {
-    // TIP: make sure you update the metadata whenever you change the data, so they match
     if (!data) {
       logger.warn({ fragmentId: this.id }, 'Attempt to set null or undefined data');
       throw new Error('Data cannot be null or undefined');
+    }
+
+    // Validate content based on type
+    switch (this.mimeType) {
+      case 'text/html':
+        if (!validateHtml(data)) {
+          logger.warn({ fragmentId: this.id }, 'Invalid HTML content');
+          throw new Error('Invalid HTML format: missing HTML tags');
+        }
+        break;
+      case 'application/json':
+        if (!validateJson(data)) {
+          logger.warn({ fragmentId: this.id }, 'Invalid JSON content');
+          throw new Error('Invalid JSON format');
+        }
+        break;
+      case 'text/csv':
+        if (!validateCsv(data)) {
+          logger.warn({ fragmentId: this.id }, 'Invalid CSV content');
+          throw new Error('Invalid CSV format');
+        }
+        break;
     }
 
     logger.debug({ fragmentId: this.id, size: Buffer.byteLength(data) }, 'Setting fragment data');
