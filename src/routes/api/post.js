@@ -35,7 +35,18 @@ module.exports = async (req, res) => {
     });
 
     // Set the fragment's data
-    await fragment.setData(req.body);
+    try {
+      await fragment.setData(req.body);
+    } catch (err) {
+      // Return 400 for validation errors
+      if (err.message.includes('Invalid HTML format') ||
+        err.message.includes('Invalid JSON format') ||
+        err.message.includes('Invalid CSV format')) {
+        return res.status(400).json(createErrorResponse(400, err.message));
+      }
+      throw err; // Re-throw other errors
+    }
+
     await fragment.save();
 
     const apiUrl = process.env.API_URL || `http://${req.headers.host}`;
