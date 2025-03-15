@@ -36,6 +36,7 @@ module.exports = async (req, res) => {
 
     // Set the fragment's data
     try {
+
       await fragment.setData(req.body);
     } catch (err) {
       // Return 400 for validation errors
