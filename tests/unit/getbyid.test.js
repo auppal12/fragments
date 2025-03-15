@@ -40,6 +40,41 @@ describe('GET /fragments/:id', () => {
         expect(response.text).toBe(testData.toString());
     });
 
+    it('should return an existing fragment\'s data with the expected Content-Type', async () => {
+        // Test different content types
+        const testCases = [
+            { type: 'text/plain', data: 'Plain text content' },
+            { type: 'text/html', data: '<p>HTML content</p>' },
+            { type: 'application/json', data: '{"key": "JSON content"}' },
+            { type: 'text/markdown', data: '# Markdown heading' },
+            { type: 'text/csv', data: 'name,age\nJohn,25' }
+        ];
+
+        for (const testCase of testCases) {
+            // Create test data
+            const testData = Buffer.from(testCase.data);
+            
+            // Mock the Fragment.byId method to return a fragment with specific content type
+            const mockFragment = { 
+                id: '123', 
+                ownerId: 'user1', 
+                type: testCase.type, 
+                size: testData.length,
+                getData: jest.fn().mockResolvedValue(testData)
+            };
+            Fragment.byId.mockResolvedValue(mockFragment);
+
+            const response = await request(app)
+                .get('/fragments/123')
+                .set('user', 'user1');
+
+            expect(response.status).toBe(200);
+            expect(response.headers['content-type']).toBe(testCase.type);
+            expect(response.headers['content-length']).toBe(String(testData.length));
+            expect(response.text).toBe(testCase.data);
+        }
+    });
+
     it('should return 404 if fragment not found', async () => {
         // Mock the Fragment.byId method to throw an error
         const error = new Error('Fragment not found');
