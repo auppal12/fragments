@@ -7,12 +7,19 @@ const logger = require('../../logger');
  */
 module.exports = async (req, res) => {
     try {
-        logger.debug({ userId: req.user }, 'Getting fragments for user');
+        // Check if we should expand the fragments or just return IDs
+        const expand = req.query.expand === '1' || req.query.expand === 'true';
         
-        // Get all fragments for this user
-        const fragments = await Fragment.byUser(req.user);
+        logger.debug({ userId: req.user, expand }, 'Getting fragments for user');
         
-        logger.debug({ userId: req.user, fragments: fragments.length }, 'Got fragments');
+        // Get all fragments for this user, passing the expand flag
+        const fragments = await Fragment.byUser(req.user, expand);
+        
+        logger.debug({ 
+            userId: req.user, 
+            fragments: Array.isArray(fragments) ? fragments.length : 'unknown',
+            expand 
+        }, 'Got fragments');
         
         res.status(200).json({
             ...createSuccessResponse(),
