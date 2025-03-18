@@ -40,7 +40,7 @@ FROM node:22-alpine
 WORKDIR /app
 
 # Install curl and tini as the init process
-RUN apk add --no-cache curl=8.12.1 tini=0.19.0
+RUN apk add --no-cache curl=8.12.1-r1 tini=0.19.0-r3
 
 # Copy built files from builder stage
 COPY --from=builder /app/package*.json ./
