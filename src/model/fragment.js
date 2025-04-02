@@ -73,10 +73,23 @@ const validateJson = (data) => {
   }
 };
 
+// Update the validateCsv function with the more flexible implementation
 const validateCsv = (data) => {
   const content = data.toString();
-  // Basic check for comma-separated values
-  return content.includes(',') && content.split('\n').length > 0;
+  
+  // Check if there are multiple lines
+  const lines = content.trim().split(/\r?\n/);
+  const hasMultipleLines = lines.length > 0;
+  
+  // Check for common separators (comma, semicolon, tab, pipe)
+  const firstLine = lines[0] || '';
+  const hasCommonSeparator = 
+    firstLine.includes(',') || 
+    firstLine.includes(';') || 
+    firstLine.includes('\t') || 
+    firstLine.includes('|');
+    
+  return hasMultipleLines && hasCommonSeparator;
 };
 
 class Fragment {
