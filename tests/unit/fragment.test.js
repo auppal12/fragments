@@ -168,7 +168,7 @@ describe('Fragment class', () => {
         type: 'text/markdown',
         size: 0,
       });
-      expect(fragment.formats).toEqual(['text/markdown', 'text/plain']);
+      expect(fragment.formats).toEqual(['text/markdown', 'text/plain', 'text/html']);
     });
 
     test('formats returns the expected formats for text/html', () => {
