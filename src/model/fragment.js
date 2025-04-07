@@ -20,7 +20,12 @@ const validTypes = [
   'text/markdown',
   'text/html',
   'text/csv',
-  'application/json'
+  'application/json',
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'image/avif',
+  'image/gif'
 ];
 
 // validation for text/html type
@@ -76,19 +81,19 @@ const validateJson = (data) => {
 // Update the validateCsv function with the more flexible implementation
 const validateCsv = (data) => {
   const content = data.toString();
-  
+
   // Check if there are multiple lines
   const lines = content.trim().split(/\r?\n/);
   const hasMultipleLines = lines.length > 0;
-  
+
   // Check for common separators (comma, semicolon, tab, pipe)
   const firstLine = lines[0] || '';
-  const hasCommonSeparator = 
-    firstLine.includes(',') || 
-    firstLine.includes(';') || 
-    firstLine.includes('\t') || 
+  const hasCommonSeparator =
+    firstLine.includes(',') ||
+    firstLine.includes(';') ||
+    firstLine.includes('\t') ||
     firstLine.includes('|');
-    
+
   return hasMultipleLines && hasCommonSeparator;
 };
 
@@ -281,6 +286,14 @@ class Fragment {
   }
 
   /**
+   * Returns true if this fragment is an image/* mime type
+   * @returns {boolean} true if fragment's type is image/*
+   */
+  get isImage() {
+    return this.mimeType.startsWith('image/');
+  }
+
+  /**
    * Returns the formats into which this fragment type can be converted
    * @returns {Array<string>} list of supported mime types
    */
@@ -292,6 +305,14 @@ class Fragment {
     if (this.isText && this.mimeType !== 'text/plain') {
       formats.push('text/plain');
     }
+
+    // If this is text/markdown, it can be converted to text/html
+    if (this.mimeType === 'text/markdown') {
+      formats.push('text/html');
+    }
+
+    // For now, images are only returned in their native format
+    // We'll add conversion support later
 
     return formats;
   }
