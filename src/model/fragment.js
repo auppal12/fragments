@@ -4,6 +4,8 @@ const { randomUUID } = require('crypto');
 // Use https://www.npmjs.com/package/content-type to create/parse Content-Type headers
 const contentType = require('content-type');
 const logger = require('../logger');
+const md = require('markdown-it')();
+const yaml = require('js-yaml');
 
 // Functions for working with fragment metadata/data using our DB
 const {
@@ -21,6 +23,8 @@ const validTypes = [
   'text/html',
   'text/csv',
   'application/json',
+  'application/yaml',
+  'application/x-yaml',
   'image/png',
   'image/jpeg',
   'image/webp',
@@ -269,6 +273,93 @@ class Fragment {
   }
 
   /**
+   * Converts fragment data from one format to another
+   * @param {Buffer} data the fragment data to convert
+   * @param {string} targetType the MIME type to convert to
+   * @returns {Buffer} the converted data
+   * @throws {Error} if conversion is not supported or fails
+   */
+  async convertData(data, targetType) {
+    // If the types are the same, no conversion needed
+    if (this.mimeType === targetType) {
+      return data;
+    }
+
+    const sourceData = data.toString();
+
+    // Text conversions
+    if (targetType === 'text/plain') {
+      if (this.mimeType === 'text/html') {
+        // Remove HTML tags for plain text
+        return Buffer.from(sourceData.replace(/<[^>]*>/g, ''));
+      } else if (this.mimeType === 'text/markdown') {
+        // Remove Markdown syntax for plain text
+        return Buffer.from(
+          sourceData
+            .replace(/#+\s+/g, '') // Remove headings (# Heading)
+            .replace(/\*\*(.*?)\*\*/g, '$1') // Remove bold (**text**)
+            .replace(/\*(.*?)\*/g, '$1') // Remove italic (*text*)
+            .replace(/`(.*?)`/g, '$1') // Remove inline code (`code`)
+            .replace(/~~(.*?)~~/g, '$1') // Remove strikethrough (~~text~~)
+            .replace(/\[(.*?)\]\(.*?\)/g, '$1') // Replace links with just the text
+            .replace(/^\s*>\s*(.*)/gm, '$1') // Remove blockquotes
+            .replace(/^\s*[-*+]\s+/gm, '') // Remove list markers
+            .replace(/^\s*\d+\.\s+/gm, '') // Remove numbered list markers
+            .replace(/\n{2,}/g, '\n\n') // Normalize multiple newlines
+        );
+      } else if (this.mimeType === 'application/json') {
+        // Pretty print JSON
+        return Buffer.from(JSON.stringify(JSON.parse(sourceData), null, 2));
+      } else if (this.mimeType === 'text/csv') {
+        // CSV as text (no processing needed)
+        return data;
+      } else if (this.mimeType === 'application/yaml' || this.mimeType === 'application/x-yaml') {
+        // YAML as text (no processing needed)
+        return data;
+      }
+    }
+
+    // Markdown to HTML conversion
+    if (this.mimeType === 'text/markdown' && targetType === 'text/html') {
+      // Use the markdown-it library
+      return Buffer.from(md.render(sourceData));
+    }
+
+    // CSV to JSON conversion
+    if (this.mimeType === 'text/csv' && targetType === 'application/json') {
+      // Simple CSV parsing (you should use a proper CSV library)
+      const lines = sourceData.trim().split('\n');
+      const headers = lines[0].split(',');
+      const result = [];
+
+      for (let i = 1; i < lines.length; i++) {
+        const obj = {};
+        const currentLine = lines[i].split(',');
+        for (let j = 0; j < headers.length; j++) {
+          obj[headers[j].trim()] = currentLine[j].trim();
+        }
+        result.push(obj);
+      }
+
+      return Buffer.from(JSON.stringify(result));
+    }
+
+    // JSON to YAML conversion
+    if (this.mimeType === 'application/json' &&
+      (targetType === 'application/yaml' || targetType === 'application/x-yaml')) {
+      return Buffer.from(yaml.dump(JSON.parse(sourceData)));
+    }
+
+    // YAML to JSON conversion
+    if ((this.mimeType === 'application/yaml' || this.mimeType === 'application/x-yaml') &&
+      targetType === 'application/json') {
+      return Buffer.from(JSON.stringify(yaml.load(sourceData), null, 2));
+    }
+
+    throw new Error(`Conversion from ${this.mimeType} to ${targetType} is not implemented`);
+  }
+
+  /**
    * Returns the mime type (e.g., without encoding) for the fragment's type:
    * "text/html; charset=utf-8" -> "text/html"
    * @returns {string} fragment's mime type (without encoding)
@@ -301,18 +392,28 @@ class Fragment {
     // All fragments can be returned as their native type
     const formats = [this.mimeType];
 
-    // If this is a text/* fragment, it can also be returned as plain text
-    if (this.isText && this.mimeType !== 'text/plain') {
-      formats.push('text/plain');
+    // Format-specific conversions based on requirements
+    switch (this.mimeType) {
+      case 'text/plain':
+        // Plain text has no conversions
+        break;
+      case 'text/markdown':
+        formats.push('text/plain', 'text/html');
+        break;
+      case 'text/html':
+        formats.push('text/plain');
+        break;
+      case 'text/csv':
+        formats.push('text/plain', 'application/json');
+        break;
+      case 'application/json':
+        formats.push('text/plain', 'application/yaml', 'application/x-yaml');
+        break;
+      case 'application/yaml':
+      case 'application/x-yaml':
+        formats.push('text/plain', 'application/json');
+        break;
     }
-
-    // If this is text/markdown, it can be converted to text/html
-    if (this.mimeType === 'text/markdown') {
-      formats.push('text/html');
-    }
-
-    // For now, images are only returned in their native format
-    // We'll add conversion support later
 
     return formats;
   }
@@ -330,6 +431,45 @@ class Fragment {
       logger.warn({ contentType: value }, 'Unsupported content type');
     }
     return isSupported;
+  }
+
+  /**
+   * Maps file extensions to their corresponding MIME types
+   */
+  static get extensionToMimeType() {
+    return {
+      '.txt': 'text/plain',
+      '.md': 'text/markdown',
+      '.html': 'text/html',
+      '.csv': 'text/csv',
+      '.json': 'application/json',
+      '.yaml': 'application/yaml',
+      '.yml': 'application/yaml'
+    };
+  }
+
+  /**
+   * Maps MIME types to their corresponding file extensions
+   */
+  static get mimeTypeToExtension() {
+    return {
+      'text/plain': '.txt',
+      'text/markdown': '.md',
+      'text/html': '.html',
+      'text/csv': '.csv',
+      'application/json': '.json',
+      'application/yaml': '.yaml',
+      'application/x-yaml': '.yaml'
+    };
+  }
+
+  /**
+   * Gets the preferred file extension for a given MIME type
+   * @param {string} mimeType the MIME type
+   * @returns {string} the file extension (including the dot)
+   */
+  static getExtensionForMimeType(mimeType) {
+    return Fragment.mimeTypeToExtension[mimeType] || '';
   }
 }
 
