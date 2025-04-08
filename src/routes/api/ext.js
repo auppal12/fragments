@@ -2,8 +2,6 @@ const { Fragment } = require('../../model/fragment');
 const { createErrorResponse } = require('../../response');
 const logger = require('../../logger');
 
-const md = require('markdown-it')();
-
 /**
  * Get a fragment's data by its ID with optional format conversion based on extension
  */
@@ -16,7 +14,7 @@ module.exports = async (req, res) => {
 
         // Get the fragment by ID
         const fragment = await Fragment.byId(userId, id);
-        
+
         if (!fragment) {
             logger.warn(`Fragment not found for ID: ${id}`);
             return res.status(404).json(createErrorResponse(404, 'Fragment not found'));
@@ -25,30 +23,46 @@ module.exports = async (req, res) => {
         try {
             // Get the data
             const data = await fragment.getData();
-            
-            // Handle conversion based on extension
-            if (fragment.mimeType === 'text/markdown' && ext === 'html') {
-                // Convert Markdown to HTML using markdown-it
-                const htmlContent = md.render(data.toString());
-                const htmlBuffer = Buffer.from(htmlContent);
 
-                logger.debug({ htmlBuffer }, 'Converted Markdown to HTML');
+            // Map extension to MIME type
+            const extensionMap = {
+                'txt': 'text/plain',
+                'md': 'text/markdown',
+                'html': 'text/html',
+                'json': 'application/json',
+                'csv': 'text/csv',
+                'yaml': 'application/yaml',
+                'yml': 'application/yaml'
+            };
 
-                // Set appropriate headers for HTML content
-                res.setHeader('Content-Type', 'text/html');
-                res.setHeader('Content-Length', htmlBuffer.length);
-                
-                return res.status(200).send(htmlBuffer);
+            const targetType = extensionMap[ext];
+
+            // If no conversion needed or extension not recognized, return original
+            if (!targetType || fragment.mimeType === targetType) {
+                res.setHeader('Content-Type', fragment.type);
+                res.setHeader('Content-Length', fragment.size);
+                return res.status(200).send(data);
             }
 
-            // For other supported formats or if we get here, return the original data
-            res.setHeader('Content-Type', fragment.type);
-            res.setHeader('Content-Length', fragment.size);
-            return res.status(200).send(data);
+            // Check if the requested conversion is supported for this fragment type
+            if (!fragment.formats.includes(targetType)) {
+                logger.warn(`Unsupported conversion from ${fragment.mimeType} to ${targetType}`);
+                return res.status(415).json(createErrorResponse(415,
+                    `Conversion from ${fragment.mimeType} to ${targetType} is not supported`));
+            }
+
+            // Convert the data
+            const convertedData = await fragment.convertData(data, targetType);
+
+            // Set appropriate headers for content type
+            res.setHeader('Content-Type', targetType);
+            res.setHeader('Content-Length', Buffer.byteLength(convertedData));
+
+            return res.status(200).send(convertedData);
 
         } catch (dataError) {
-            logger.error(`Error retrieving fragment data with ID ${id}: ${dataError.message}`, { error: dataError });
-            res.status(404).json(createErrorResponse(404, 'An error occurred while retrieving fragment data'));
+            logger.error(`Error retrieving or converting fragment data with ID ${id}: ${dataError.message}`, { error: dataError });
+            res.status(404).json(createErrorResponse(404, 'An error occurred while retrieving or converting fragment data'));
         }
     } catch (error) {
         logger.error(`Error fetching fragment with ID ${id}: ${error.message}`, { error });
