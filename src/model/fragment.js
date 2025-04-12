@@ -101,6 +101,25 @@ const validateCsv = (data) => {
   return hasMultipleLines && hasCommonSeparator;
 };
 
+const validateYaml = (data) => {
+  try {
+    const content = data.toString();
+    
+    // Check if input is just a simple string with no YAML structure
+    if (!content.includes(':')) {
+      return false;
+    }
+    
+    // Try to parse the YAML
+    const parsed = yaml.load(content);
+    
+    // Check if the result is a proper object/map
+    return typeof parsed === 'object' && parsed !== null;
+  } catch {
+    return false;
+  }
+};
+
 class Fragment {
   constructor({
     id = randomUUID(),
@@ -254,6 +273,13 @@ class Fragment {
         if (!validateCsv(data)) {
           logger.warn({ fragmentId: this.id }, 'Invalid CSV content');
           throw new Error('Invalid CSV format');
+        }
+        break;
+      case 'application/yaml':
+      case 'application/x-yaml':
+        if (!validateYaml(data)) {
+          logger.warn({ fragmentId: this.id }, 'Invalid YAML content');
+          throw new Error('Invalid YAML format');
         }
         break;
     }
