@@ -202,4 +202,16 @@ describe('POST /v1/fragments', () => {
     expect(res.body.status).toBe('error');
     expect(res.body.error.message).toContain('Invalid CSV format');
   });
+
+  test('rejects invalid YAML content', async () => {
+    const res = await request(app)
+      .post('/v1/fragments')
+      .auth(username, password)
+      .set('Content-Type', 'application/yaml')
+      .send('invalid: yaml"": : value without proper structure');
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.status).toBe('error');
+    expect(res.body.error.message).toContain('Invalid YAML format');
+  });
 });
