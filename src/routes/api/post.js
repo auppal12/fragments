@@ -63,9 +63,14 @@ module.exports = async (req, res) => {
       }));
 
   } catch (error) {
+    // Handle validation errors specifically
+    if (error.message.includes('Invalid YAML format')) {
+      logger.warn({ error, userId: req.user }, 'Validation error creating fragment');
+      return res.status(400).json(createErrorResponse(400, error.message));
+    }
+
+    // Log unexpected errors and return a 500 status code
     logger.error({ error, userId: req.user }, 'Unexpected error creating fragment');
-    return res.status(500).json(
-      createErrorResponse(500, error.message)
-    );
+    return res.status(500).json(createErrorResponse(500, error.message));
   }
 };
