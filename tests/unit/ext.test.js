@@ -7,6 +7,18 @@ jest.mock('../../src/model/fragment');
 jest.mock('../../src/response');
 jest.mock('../../src/logger');
 
+jest.mock('sharp', () => {
+  // Create a mock implementation of Sharp
+  const mockSharp = jest.fn().mockReturnValue({
+    png: jest.fn().mockReturnThis(),
+    jpeg: jest.fn().mockReturnThis(),
+    webp: jest.fn().mockReturnThis(),
+    gif: jest.fn().mockReturnThis(),
+    toBuffer: jest.fn().mockResolvedValue(Buffer.from('mock-converted-image'))
+  });
+  return mockSharp;
+});
+
 // Mock markdown-it
 jest.mock('markdown-it', () => {
   return jest.fn(() => ({
@@ -112,6 +124,67 @@ describe('GET /fragments/:id.:ext', () => {
     expect(logger.warn).toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(404);
     expect(res.json).toHaveBeenCalledWith({ code: 404, message: 'Fragment not found' });
+  });
+
+  it('should convert PNG to JPEG when fragment type is image/png and ext is jpg', async () => {
+    // Arrange
+    const req = mockRequest('valid-id', 'jpg');
+    const res = mockResponse();
+    const mockFragmentData = Buffer.from('mock-png-data');
+    const convertedData = Buffer.from('mock-jpeg-data');
+
+    const mockFragment = {
+      id: 'valid-id',
+      ownerId: 'user123',
+      mimeType: 'image/png',
+      type: 'image/png',
+      size: mockFragmentData.length,
+      getData: jest.fn().mockResolvedValue(mockFragmentData),
+      formats: ['image/png', 'image/jpeg', 'image/webp', 'image/gif'],
+      convertData: jest.fn().mockResolvedValue(convertedData)
+    };
+
+    Fragment.byId.mockResolvedValue(mockFragment);
+
+    // Act
+    await extRoute(req, res);
+
+    // Assert
+    expect(Fragment.byId).toHaveBeenCalledWith('user123', 'valid-id');
+    expect(mockFragment.convertData).toHaveBeenCalledWith(mockFragmentData, 'image/jpeg');
+    expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'image/jpeg');
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.send).toHaveBeenCalledWith(convertedData);
+  });
+
+  it('should return 415 when requesting an unsupported image conversion', async () => {
+    // Arrange
+    const req = mockRequest('valid-id', 'txt');
+    const res = mockResponse();
+    const mockFragmentData = Buffer.from('mock-image-data');
+
+    const mockFragment = {
+      id: 'valid-id',
+      ownerId: 'user123',
+      mimeType: 'image/png',
+      type: 'image/png',
+      size: mockFragmentData.length,
+      getData: jest.fn().mockResolvedValue(mockFragmentData),
+      formats: ['image/png', 'image/jpeg', 'image/webp', 'image/gif']  // No text/plain
+    };
+
+    Fragment.byId.mockResolvedValue(mockFragment);
+
+    // Act
+    await extRoute(req, res);
+
+    // Assert
+    expect(Fragment.byId).toHaveBeenCalledWith('user123', 'valid-id');
+    expect(res.status).toHaveBeenCalledWith(415);
+    expect(res.json).toHaveBeenCalledWith({
+      code: 415,
+      message: 'Conversion from image/png to text/plain is not supported'
+    });
   });
 
   it('should handle errors when fetching fragment data', async () => {
