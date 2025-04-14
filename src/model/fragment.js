@@ -6,6 +6,7 @@ const contentType = require('content-type');
 const logger = require('../logger');
 const md = require('markdown-it')();
 const yaml = require('js-yaml');
+const sharp = require('sharp');
 
 // Functions for working with fragment metadata/data using our DB
 const {
@@ -104,15 +105,15 @@ const validateCsv = (data) => {
 const validateYaml = (data) => {
   try {
     const content = data.toString();
-    
+
     // Check if input is just a simple string with no YAML structure
     if (!content.includes(':')) {
       return false;
     }
-    
+
     // Try to parse the YAML
     const parsed = yaml.load(content);
-    
+
     // Check if the result is a proper object/map
     return typeof parsed === 'object' && parsed !== null;
   } catch {
@@ -311,6 +312,38 @@ class Fragment {
       return data;
     }
 
+    // Image conversions
+    if (this.isImage && targetType.startsWith('image/')) {
+      try {
+        // Use sharp for image conversions
+        let converter = sharp(data);
+
+        // Set the output format based on the target type
+        switch (targetType) {
+          case 'image/png':
+            converter = converter.png();
+            break;
+          case 'image/jpeg':
+            converter = converter.jpeg();
+            break;
+          case 'image/webp':
+            converter = converter.webp();
+            break;
+          case 'image/gif':
+            converter = converter.gif();
+            break;
+          default:
+            throw new Error(`Unsupported image conversion target: ${targetType}`);
+        }
+
+        // Perform the conversion and return as buffer
+        return await converter.toBuffer();
+      } catch (error) {
+        logger.error({ error, fragmentId: this.id }, 'Error converting image');
+        throw new Error(`Error converting image: ${error.message}`);
+      }
+    }
+
     const sourceData = data.toString();
 
     // Text conversions
@@ -439,9 +472,17 @@ class Fragment {
       case 'application/x-yaml':
         formats.push('text/plain', 'application/json');
         break;
+      case 'image/png':
+      case 'image/jpeg':
+      case 'image/webp':
+      case 'image/gif':
+        // All image types can be converted to any other image type
+        formats.push('image/png', 'image/jpeg', 'image/webp', 'image/gif');
+        break;
     }
 
-    return formats;
+    // Remove duplicates (in case the same format was added)
+    return [...new Set(formats)];
   }
 
   /**
@@ -470,7 +511,12 @@ class Fragment {
       '.csv': 'text/csv',
       '.json': 'application/json',
       '.yaml': 'application/yaml',
-      '.yml': 'application/yaml'
+      '.yml': 'application/yaml',
+      '.png': 'image/png',
+      '.jpg': 'image/jpeg',
+      '.jpeg': 'image/jpeg',
+      '.webp': 'image/webp',
+      '.gif': 'image/gif'
     };
   }
 
@@ -485,7 +531,11 @@ class Fragment {
       'text/csv': '.csv',
       'application/json': '.json',
       'application/yaml': '.yaml',
-      'application/x-yaml': '.yaml'
+      'application/x-yaml': '.yaml',
+      'image/png': '.png',
+      'image/jpeg': '.jpg',
+      'image/webp': '.webp',
+      'image/gif': '.gif'
     };
   }
 
